@@ -142,6 +142,49 @@ int sysoff_measure(int fd, int method, int n_samples,
 	return -EOPNOTSUPP;
 }
 
+int sysoff_measure2(int fd1, int method1, int n_samples1,
+		    int fd2, int method2, int n_samples2,
+		    int64_t *result, uint64_t *ts, int64_t *delay)
+{
+	int64_t result1, result2, result3;
+	int64_t delay1, delay2, delay3, drift;
+	uint64_t ts1, ts2, ts3;
+	int err;
+
+	err = sysoff_measure(fd1, method1, n_samples1,
+			     &result1, &ts1, &delay1);
+	if (err)
+		return err;
+
+	err = sysoff_measure(fd2, method2, n_samples2,
+			     &result2, &ts2, &delay2);
+	if (err)
+		return err;
+
+	err = sysoff_measure(fd1, method1, n_samples1,
+			     &result3, &ts3, &delay3);
+	if (err)
+		return err;
+
+	/* estimate the accumulated drift, to be added to delay */
+	drift = result3 - result1;
+	if (drift < 0)
+		drift = -drift;
+
+	/* average the measurements of the first clock */
+	result1 = (result1 + result3) / 2;
+	ts1 = (ts1 + ts3) / 2;
+
+	/* get PHC-to-PHC offset by subtracting sys offsets */
+	*result = result1 - result2;
+	/* use the first PHC's time, not system time for ts */
+	*ts = ts1 - result1;
+	/* sum all of the delays + drift */
+	*delay = delay1 + delay2 + delay3 + drift;
+
+	return 0;
+}
+
 int sysoff_probe(int fd, int n_samples)
 {
 	int64_t junk, delay;
