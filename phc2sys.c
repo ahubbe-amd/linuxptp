@@ -85,6 +85,12 @@ struct clock {
 	int utc_offset_set;
 	struct servo *servo;
 	enum servo_state servo_state;
+	int delay_method;
+	int64_t delay;
+	int64_t delay_th_max;
+	int64_t delay_th_ns;
+	double delay_th_mul;
+	int64_t delay_upd_exp;
 	char *device;
 	const char *source_label;
 	struct stats *offset_stats;
@@ -232,6 +238,16 @@ static struct clock *clock_add(struct domain *domain, const char *device,
 			break;
 		}
 	}
+
+	c->delay_method = config_get_int(phc2sys_config, NULL, "phc2sys.delay_filter");
+	c->delay_th_max = config_get_int(phc2sys_config, NULL,
+					 "phc2sys.delay_th_max_ns");
+	c->delay_th_ns = config_get_int(phc2sys_config, NULL,
+					"phc2sys.delay_th_ns");
+	c->delay_th_mul = config_get_double(phc2sys_config, NULL,
+					    "phc2sys.delay_th_mul");
+	c->delay_upd_exp = config_get_double(phc2sys_config, NULL,
+					     "phc2sys.delay_upd_exp");
 
 	return c;
 }
@@ -613,11 +629,30 @@ static void update_clock_stats(struct clock *clock, unsigned int max_count,
 	stats_reset(clock->delay_stats);
 }
 
+static bool filter_delay(struct clock *clock, int64_t delay) {
+	int64_t max_delay = 0;
+
+	max_delay = clock->delay * clock->delay_th_mul + clock->delay_th_ns;
+
+	if (max_delay > clock->delay_th_max)
+		max_delay = clock->delay_th_max;
+
+	if (clock->delay_upd_exp == 0.0) {
+		clock->delay = delay;
+	} else {
+		clock->delay -= clock->delay * clock->delay_upd_exp;
+		clock->delay += delay * clock->delay_upd_exp;
+	}
+
+	return delay > max_delay;
+}
+
 static void update_clock(struct domain *domain, struct clock *clock,
 			 int64_t offset, uint64_t ts, int64_t delay)
 {
 	enum servo_state state = SERVO_UNLOCKED;
-	double ppb = 0.0;
+	double weight = 1.0, ppb = 0.0;
+	bool filter = false;
 
 	if (!clock->servo) {
 		clock->servo = servo_add(domain, clock);
@@ -633,10 +668,22 @@ static void update_clock(struct domain *domain, struct clock *clock,
 	if (domain->free_running)
 		goto report;
 
+	if (clock->delay_method && filter_delay(clock, delay)) {
+		filter = true;
+		if (clock->delay_method == 1)
+			return;
+
+		if (clock->delay_method == 2 || clock->delay_method == 3)
+			offset = 0;
+
+		if (clock->delay_method == 2 || clock->delay_method == 4)
+			weight = 0.0;
+	}
+
 	if (clock->sanity_check && clockcheck_sample(clock->sanity_check, ts))
 		servo_reset(clock->servo);
 
-	ppb = servo_sample(clock->servo, offset, ts, 1.0, &state);
+	ppb = servo_sample(clock->servo, offset, ts, weight, &state);
 	clock->servo_state = state;
 
 	switch (state) {
@@ -670,9 +717,9 @@ report:
 	} else {
 		if (delay >= 0) {
 			pr_info("%s %s offset %9" PRId64 " s%d freq %+7.0f "
-				"delay %6" PRId64,
+				"delay %6" PRId64 "%s",
 				clock->device, domain->src_clock->source_label,
-				offset, state, ppb, delay);
+				offset, state, ppb, delay, filter ? " filter" : "");
 		} else {
 			pr_info("%s %s offset %9" PRId64 " s%d freq %+7.0f",
 				clock->device, domain->src_clock->source_label,

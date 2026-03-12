@@ -261,6 +261,15 @@ static struct config_enum phc2sys_sysoff_enu[] = {
 	{ NULL, 0 },
 };
 
+static struct config_enum phc2sys_delay_enu[] = {
+	{ "disable",	0 },
+	{ "discard",	1 },
+	{ "zero",	2 },
+	{ "zoffset",	3 },
+	{ "zweight",	4 },
+	{ NULL, 0 },
+};
+
 struct config_item config_tab[] = {
 	PORT_ITEM_UIN("active_key_id", 0, 0, UINT32_MAX),
 	PORT_ITEM_INT("allow_unauth", 0, 0, 2),
@@ -415,6 +424,11 @@ struct config_item config_tab[] = {
 	GLOB_ITEM_INT("verbose", 0, 0, 1),
 	GLOB_ITEM_INT("write_phase_mode", 0, 0, 1),
 	GLOB_ITEM_ENU("phc2sys.sysoff_method", 0, phc2sys_sysoff_enu),
+	PORT_ITEM_ENU("phc2sys.delay_filter", 0, phc2sys_delay_enu),
+	GLOB_ITEM_INT("phc2sys.delay_th_max_ns", INT_MAX, 0, INT_MAX),
+	GLOB_ITEM_INT("phc2sys.delay_th_ns", 100, 0, INT_MAX),
+	GLOB_ITEM_DBL("phc2sys.delay_th_mul", 1.0, 0.0, 1000.0),
+	GLOB_ITEM_DBL("phc2sys.delay_upd_exp", 0.0, 0.0, 1.0),
 };
 
 static struct unicast_master_table *current_uc_mtab;
