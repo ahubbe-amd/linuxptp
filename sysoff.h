@@ -48,3 +48,18 @@ int sysoff_probe(int fd, int n_samples);
  */
 int sysoff_measure(int fd, int method, int n_samples,
 		   int64_t *result, uint64_t *ts, int64_t *delay);
+
+/**
+ * Measure the offset between two PHCs.
+ * @param fd1        An open file descriptor to the first PHC device.
+ * @param method1    A non-negative SYSOFF_ value for the first PHC device.
+ * @param fd2        An open file descriptor to the second PHC device.
+ * @param method2    A non-negative SYSOFF_ value for the second PHC device.
+ * @param n_samples  The number of consecutive readings to make.
+ * @param result     The estimated offset in nanoseconds.
+ * @param ts         The second PHC time corresponding to the 'result'.
+ * @param delay      The delay in reading of the clocks in nanoseconds.
+ * @return  Zero on success, negative error code otherwise.
+ */
+int sysoff_measure2(int fd1, int method1, int fd2, int method2, int n_samples,
+		    int64_t *result, uint64_t *ts, int64_t *delay);

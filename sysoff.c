@@ -142,6 +142,62 @@ int sysoff_measure(int fd, int method, int n_samples,
 	return -EOPNOTSUPP;
 }
 
+int sysoff_measure2(int fd1, int method1, int fd2, int method2, int n_samples,
+		    int64_t *result, uint64_t *ts, int64_t *delay)
+{
+	struct timespec first, last;
+	int64_t interval, result1, result2, result3;
+	int64_t delay1, delay2, delay3, drift;
+	uint64_t ts1, ts2, ts3;
+	int err;
+
+	clock_gettime(CLOCK_MONOTONIC, &first);
+
+	err = sysoff_measure(fd1, method1, n_samples,
+			     &result1, &ts1, &delay1);
+	if (err)
+		return err;
+
+	err = sysoff_measure(fd2, method2, n_samples,
+			     &result2, &ts2, &delay2);
+	if (err)
+		return err;
+
+	err = sysoff_measure(fd1, method1, n_samples,
+			     &result3, &ts3, &delay3);
+	if (err)
+		return err;
+
+	clock_gettime(CLOCK_MONOTONIC, &last);
+
+	/* validate the interval: CLOCK_REALTIME in sysoff may have stepped */
+	interval = (last.tv_sec - first.tv_sec) * NS_PER_SEC +
+		last.tv_nsec - first.tv_nsec;
+	if (interval < 0 || ts3 < ts1 || ts3 - ts1 > interval)
+		return -EBUSY;
+
+	/* estimate the accumulated drift, to be added to delay */
+	drift = result3 - result1;
+	if (drift < 0)
+		drift = -drift;
+
+	/* use the maximum of the first or third delay */
+	if (delay1 < delay3)
+		delay1 = delay3;
+
+	/* average the offsets of the first clock */
+	result1 = (result1 + result3) / 2;
+
+	/* get PHC-to-PHC offset by subtracting sys offsets */
+	*result = result1 - result2;
+	/* use the second PHC's time, not system time for ts */
+	*ts = ts2 - result2;
+	/* sum of the delays + drift */
+	*delay = delay1 + delay2 + drift;
+
+	return 0;
+}
+
 int sysoff_probe(int fd, int n_samples)
 {
 	int64_t junk, delay;

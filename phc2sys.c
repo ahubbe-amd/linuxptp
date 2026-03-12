@@ -828,6 +828,14 @@ static int update_domain_clocks(struct domain *domain)
 				offset = -offset;
 				ts += offset;
 			}
+		} else if (domain->src_clock->sysoff_method >= 0 &&
+			   clock->sysoff_method >= 0) {
+			err = sysoff_measure2(CLOCKID_TO_FD(domain->src_clock->clkid),
+					      domain->src_clock->sysoff_method,
+					      CLOCKID_TO_FD(clock->clkid),
+					      clock->sysoff_method,
+					      domain->phc_readings,
+					      &offset, &ts, &delay);
 		} else {
 			/* use phc */
 			err = clockadj_compare(domain->src_clock->clkid,
