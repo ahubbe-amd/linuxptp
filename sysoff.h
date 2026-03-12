@@ -37,6 +37,14 @@ enum {
 int sysoff_probe(int fd, int n_samples);
 
 /**
+ * Check to see if a PTP_SYS_OFFSET ioctl is supported.
+ * @param fd  An open file descriptor to a PHC device.
+ * @param first  First and best method to probe, of the SYSOFF_ enumeration values.
+ * @return  One of the SYSOFF_ enumeration values.
+ */
+int sysoff_probe_first(int fd, int first, int n_samples);
+
+/**
  * Measure the offset between a PHC and the system time.
  * @param fd         An open file descriptor to a PHC device.
  * @param method     A non-negative SYSOFF_ value returned by sysoff_probe().

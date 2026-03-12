@@ -33,6 +33,7 @@
 #include "hash.h"
 #include "power_profile.h"
 #include "print.h"
+#include "sysoff.h"
 #include "util.h"
 
 #define UDS_FILEMODE (S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP) /*0660*/
@@ -251,6 +252,15 @@ static struct config_enum bmca_enu[] = {
 	{ NULL, 0 },
 };
 
+static struct config_enum phc2sys_sysoff_enu[] = {
+	{ "best",	0			},
+	{ "precise",	SYSOFF_PRECISE		},
+	{ "extended",	SYSOFF_EXTENDED		},
+	{ "basic",	SYSOFF_BASIC		},
+	{ "disable",	SYSOFF_RUN_TIME_MISSING	},
+	{ NULL, 0 },
+};
+
 struct config_item config_tab[] = {
 	PORT_ITEM_UIN("active_key_id", 0, 0, UINT32_MAX),
 	PORT_ITEM_INT("allow_unauth", 0, 0, 2),
@@ -404,6 +414,7 @@ struct config_item config_tab[] = {
 	GLOB_ITEM_INT("utc_offset", CURRENT_UTC_OFFSET, 0, INT_MAX),
 	GLOB_ITEM_INT("verbose", 0, 0, 1),
 	GLOB_ITEM_INT("write_phase_mode", 0, 0, 1),
+	GLOB_ITEM_ENU("phc2sys.sysoff_method", 0, phc2sys_sysoff_enu),
 };
 
 static struct unicast_master_table *current_uc_mtab;

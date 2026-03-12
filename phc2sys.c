@@ -104,6 +104,7 @@ struct domain {
 	unsigned int stats_max_count;
 	int sanity_freq_limit;
 	enum servo_type servo_type;
+	int sysoff_first;
 	int phc_readings;
 	double phc_interval;
 	int forced_sync_offset;
@@ -215,8 +216,9 @@ static struct clock *clock_add(struct domain *domain, const char *device,
 	}
 
 	if (clkid != CLOCK_INVALID && clkid != CLOCK_REALTIME)
-		c->sysoff_method = sysoff_probe(CLOCKID_TO_FD(clkid),
-						domain->phc_readings);
+		c->sysoff_method = sysoff_probe_first(CLOCKID_TO_FD(clkid),
+						      domain->sysoff_first,
+						      domain->phc_readings);
 
 	/* Add the clock to the end of the list to keep them in the
 	   command-line or ptp4l order */
@@ -1493,6 +1495,7 @@ int main(int argc, char *argv[])
 	}
 	settings.kernel_leap = config_get_int(cfg, NULL, "kernel_leap");
 	settings.sanity_freq_limit = config_get_int(cfg, NULL, "sanity_freq_limit");
+	settings.sysoff_first = config_get_int(cfg, NULL, "phc2sys.sysoff_method");
 
 	if (autocfg) {
 		if (n_domains == 0)
