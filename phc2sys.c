@@ -105,6 +105,7 @@ struct domain {
 	int sanity_freq_limit;
 	enum servo_type servo_type;
 	int phc_readings;
+	int phc_tries;
 	double phc_interval;
 	int forced_sync_offset;
 	int kernel_leap;
@@ -813,29 +814,34 @@ static int update_domain_clocks(struct domain *domain)
 		if (clock->clkid == CLOCK_REALTIME &&
 		    domain->src_clock->sysoff_method >= 0) {
 			/* use sysoff */
-			err = sysoff_measure(CLOCKID_TO_FD(domain->src_clock->clkid),
-					     domain->src_clock->sysoff_method,
-					     domain->phc_readings,
-					     &offset, &ts, &delay);
+			err = sysoff_measure_retry(CLOCKID_TO_FD(domain->
+								 src_clock->clkid),
+						   domain->src_clock->sysoff_method,
+						   domain->phc_readings,
+						   domain->phc_tries,
+						   &offset, &ts, &delay);
 		} else if (domain->src_clock->clkid == CLOCK_REALTIME &&
 			   clock->sysoff_method >= 0) {
 			/* use reversed sysoff */
-			err = sysoff_measure(CLOCKID_TO_FD(clock->clkid),
-					     clock->sysoff_method,
-					     domain->phc_readings,
-					     &offset, &ts, &delay);
+			err = sysoff_measure_retry(CLOCKID_TO_FD(clock->clkid),
+						   clock->sysoff_method,
+						   domain->phc_readings,
+						   domain->phc_tries,
+						   &offset, &ts, &delay);
 			if (!err) {
 				offset = -offset;
 				ts += offset;
 			}
 		} else if (domain->src_clock->sysoff_method >= 0 &&
 			   clock->sysoff_method >= 0) {
-			err = sysoff_measure2(CLOCKID_TO_FD(domain->src_clock->clkid),
-					      domain->src_clock->sysoff_method,
-					      CLOCKID_TO_FD(clock->clkid),
-					      clock->sysoff_method,
-					      domain->phc_readings,
-					      &offset, &ts, &delay);
+			err = sysoff_measure2_retry(CLOCKID_TO_FD(domain->
+								  src_clock->clkid),
+						    domain->src_clock->sysoff_method,
+						    CLOCKID_TO_FD(clock->clkid),
+						    clock->sysoff_method,
+						    domain->phc_readings,
+						    domain->phc_tries,
+						    &offset, &ts, &delay);
 		} else {
 			/* use phc */
 			err = clockadj_compare(domain->src_clock->clkid,
@@ -1236,6 +1242,7 @@ int main(int argc, char *argv[])
 	struct domain domains[MAX_DOMAINS];
 	struct domain settings = {
 		.phc_readings = 5,
+		.phc_tries = 3,
 		.phc_interval = 1.0,
 	};
 	int n_domains = 0;
@@ -1258,7 +1265,7 @@ int main(int argc, char *argv[])
 	progname = strrchr(argv[0], '/');
 	progname = progname ? 1+progname : argv[0];
 	while (EOF != (c = getopt_long(argc, argv,
-				"arc:d:f:s:E:P:I:S:F:R:N:O:L:M:i:u:wn:xz:l:t:mqvh",
+				"arc:d:f:s:E:P:I:S:F:R:N:T:O:L:M:i:u:wn:xz:l:t:mqvh",
 				opts, &index))) {
 		switch (c) {
 		case 0:
@@ -1343,6 +1350,10 @@ int main(int argc, char *argv[])
 			break;
 		case 'N':
 			if (get_arg_val_i(c, optarg, &settings.phc_readings, 1, INT_MAX))
+				goto end;
+			break;
+		case 'T':
+			if (get_arg_val_i(c, optarg, &settings.phc_tries, 1, INT_MAX))
 				goto end;
 			break;
 		case 'O':

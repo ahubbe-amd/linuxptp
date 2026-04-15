@@ -192,6 +192,36 @@ int sysoff_measure2(int fd1, int method1, int fd2, int method2, int n_samples,
 	return 0;
 }
 
+int sysoff_measure_retry(int fd, int method, int n_samples, int n_tries,
+			 int64_t *result, uint64_t *ts, int64_t *delay)
+{
+	int i, err = -EINVAL; /* if n_tries <= zero */
+
+	for (i = 0; i < n_tries; i++) {
+		err = sysoff_measure(fd, method, n_samples,
+				     result, ts, delay);
+		if (!err)
+			return 0;
+	}
+
+	return err;
+}
+
+int sysoff_measure2_retry(int fd1, int method1, int fd2, int method2, int n_samples,
+			  int n_tries, int64_t *result, uint64_t *ts, int64_t *delay)
+{
+	int i, err = -EINVAL; /* if n_tries <= zero */
+
+	for (i = 0; i < n_tries; i++) {
+		err = sysoff_measure2(fd1, method1, fd2, method2, n_samples,
+				      result, ts, delay);
+		if (!err)
+			return 0;
+	}
+
+	return err;
+}
+
 int sysoff_probe(int fd, int n_samples)
 {
 	int64_t junk, delay;

@@ -163,6 +163,11 @@ Only the fastest reading is used to update the clock.  This is useful to
 minimize the error caused by random delays in scheduling and bus utilization.
 The default is 5.
 .TP
+.BI \-T " tries"
+Specify the number tries for reading clocks on each sink update.  If there is an
+error reading clocks, retry up to the number of tries.
+The default is 3.
+.TP
 .BI \-O " offset"
 Specify the offset between the sink and source times in seconds. If not
 specified, the offset will be set according to the currentUtcOffset value
