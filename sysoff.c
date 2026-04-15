@@ -54,28 +54,15 @@ static int sysoff_precise(int fd, int64_t *result, uint64_t *ts)
 	return 0;
 }
 
-static int64_t sysoff_estimate(struct ptp_clock_time *pct, int extended,
-			       int n_samples, uint64_t *ts, int64_t *delay)
+static int sysoff_estimate(struct ptp_clock_time *pct, int extended, int n_samples,
+			   int64_t *result, uint64_t *ts, int64_t *delay)
 {
 	int64_t t1, t2, tp;
 	int64_t interval, timestamp, offset;
-	int64_t shortest_interval, best_timestamp, best_offset;
-	int i = 0;
+	int64_t shortest_interval = INT64_MAX, best_timestamp = 0, best_offset = 0;
+	int i;
 
-	if (extended) {
-		t1 = pctns(&pct[3*i]);
-		tp = pctns(&pct[3*i+1]);
-		t2 = pctns(&pct[3*i+2]);
-	} else {
-		t1 = pctns(&pct[2*i]);
-		tp = pctns(&pct[2*i+1]);
-		t2 = pctns(&pct[2*i+2]);
-	}
-	shortest_interval = t2 - t1;
-	best_timestamp = (t2 + t1) / 2;
-	best_offset = best_timestamp - tp;
-
-	for (i = 1; i < n_samples; i++) {
+	for (i = 0; i < n_samples; i++) {
 		if (extended) {
 			t1 = pctns(&pct[3*i]);
 			tp = pctns(&pct[3*i+1]);
@@ -85,7 +72,11 @@ static int64_t sysoff_estimate(struct ptp_clock_time *pct, int extended,
 			tp = pctns(&pct[2*i+1]);
 			t2 = pctns(&pct[2*i+2]);
 		}
+
 		interval = t2 - t1;
+		if (interval < 0)
+			continue;
+
 		timestamp = (t2 + t1) / 2;
 		offset = timestamp - tp;
 		if (interval < shortest_interval) {
@@ -94,9 +85,14 @@ static int64_t sysoff_estimate(struct ptp_clock_time *pct, int extended,
 			best_offset = offset;
 		}
 	}
+
+	if (shortest_interval == INT64_MAX)
+		return -EBUSY;
+
+	*result = best_offset;
 	*ts = best_timestamp;
 	*delay = shortest_interval;
-	return best_offset;
+	return 0;
 }
 
 static int sysoff_extended(int fd, int n_samples,
@@ -109,8 +105,7 @@ static int sysoff_extended(int fd, int n_samples,
 		print_ioctl_error("PTP_SYS_OFFSET_EXTENDED");
 		return -errno;
 	}
-	*result = sysoff_estimate(&pso.ts[0][0], 1, n_samples, ts, delay);
-	return 0;
+	return sysoff_estimate(&pso.ts[0][0], 1, n_samples, result, ts, delay);
 }
 
 static int sysoff_basic(int fd, int n_samples,
@@ -123,8 +118,7 @@ static int sysoff_basic(int fd, int n_samples,
 		print_ioctl_error("PTP_SYS_OFFSET");
 		return -errno;
 	}
-	*result = sysoff_estimate(pso.ts, 0, n_samples, ts, delay);
-	return 0;
+	return sysoff_estimate(pso.ts, 0, n_samples, result, ts, delay);
 }
 
 int sysoff_measure(int fd, int method, int n_samples,
