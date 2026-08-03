@@ -50,3 +50,19 @@ int sysoff_probe(int fd, clockid_t sys_clock, int n_samples);
  */
 int sysoff_measure(int fd, clockid_t sys_clock, int method, int n_samples,
 		   int64_t *result, uint64_t *ts, int64_t *delay);
+
+/**
+ * Measure the offset between a PHC and the system time, retrying on -EBUSY.
+ * @param fd         An open file descriptor to a PHC device.
+ * @param sys_clock  The system clock to measure against.
+ * @param method     A non-negative SYSOFF_ value returned by sysoff_probe().
+ * @param n_samples  The number of consecutive readings to make.
+ * @param n_tries    The number of attempts in case of -EBUSY.
+ * @param result     The estimated offset in nanoseconds.
+ * @param ts         The system time corresponding to the 'result'.
+ * @param delay      The delay in reading of the clock in nanoseconds.
+ * @return  Zero on success, negative error code otherwise.
+ */
+int sysoff_measure_retry(int fd, clockid_t sys_clock, int method, int n_samples,
+			 int n_tries, int64_t *result, uint64_t *ts,
+			 int64_t *delay);

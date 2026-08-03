@@ -147,6 +147,22 @@ int sysoff_measure(int fd, clockid_t sys_clock, int method, int n_samples,
 	return -EOPNOTSUPP;
 }
 
+int sysoff_measure_retry(int fd, clockid_t sys_clock, int method, int n_samples,
+			 int n_tries, int64_t *result, uint64_t *ts,
+			 int64_t *delay)
+{
+	int i, err;
+
+	for (i = 0; i < n_tries; i++) {
+		err = sysoff_measure(fd, sys_clock, method, n_samples,
+				     result, ts, delay);
+		if (err != -EBUSY)
+			return err;
+	}
+
+	return err;
+}
+
 int sysoff_probe(int fd, clockid_t sys_clock, int n_samples)
 {
 	int64_t junk, delay;
