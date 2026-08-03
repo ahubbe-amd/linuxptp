@@ -148,10 +148,27 @@ int sysoff_measure(int fd, clockid_t sys_clock, int method, int n_samples,
 	return -EOPNOTSUPP;
 }
 
+int sysoff_measure_retry(int fd, clockid_t sys_clock, int method, int n_samples,
+			 int n_tries, int64_t *result, uint64_t *ts,
+			 int64_t *delay)
+{
+	int i, err = -EINVAL;
+
+	for (i = 0; i < n_tries; i++) {
+		err = sysoff_measure(fd, sys_clock, method, n_samples,
+				     result, ts, delay);
+		if (err != -EBUSY)
+			return err;
+	}
+
+	return err;
+}
+
 int sysoff_probe(int fd, clockid_t sys_clock, int n_samples)
 {
 	int64_t junk, delay;
-	int i, j, err;
+	int method, err;
+	int n_tries = 3;
 	uint64_t ts;
 
 	if (n_samples > PTP_MAX_SAMPLES) {
@@ -161,16 +178,14 @@ int sysoff_probe(int fd, clockid_t sys_clock, int n_samples)
 		return SYSOFF_RUN_TIME_MISSING;
 	}
 
-	for (i = 0; i < SYSOFF_LAST; i++) {
-		for (j = 0; j < 3; j++) {
-			err = sysoff_measure(fd, sys_clock, i,
-					     n_samples, &junk, &ts, &delay);
-			if (err == -EBUSY)
-				continue;
-			if (err)
-				break;
-			return i;
-		}
+	for (method = 0; method < SYSOFF_LAST; method++) {
+		err = sysoff_measure_retry(fd, sys_clock, method,
+					   n_samples, n_tries,
+					   &junk, &ts, &delay);
+		if (err)
+			continue;
+
+		return method;
 	}
 
 	return SYSOFF_RUN_TIME_MISSING;

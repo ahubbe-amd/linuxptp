@@ -106,6 +106,7 @@ struct domain {
 	int sanity_freq_limit;
 	enum servo_type servo_type;
 	int phc_readings;
+	int phc_tries;
 	double phc_interval;
 	int forced_sync_offset;
 	int kernel_leap;
@@ -832,19 +833,21 @@ static int update_domain_clocks(struct domain *domain)
 		if (is_sysoff_usable(domain->src_clock, clock,
 				     domain->phc_readings)) {
 			/* use sysoff */
-			err = sysoff_measure(CLOCKID_TO_FD(domain->src_clock->clkid),
-					     clock->clkid,
-					     domain->src_clock->sysoff_method,
-					     domain->phc_readings,
-					     &offset, &ts, &delay);
+			err = sysoff_measure_retry(CLOCKID_TO_FD(domain->src_clock->clkid),
+						   clock->clkid,
+						   domain->src_clock->sysoff_method,
+						   domain->phc_readings,
+						   domain->phc_tries,
+						   &offset, &ts, &delay);
 		} else if (is_sysoff_usable(clock, domain->src_clock,
 					    domain->phc_readings)) {
 			/* use reversed sysoff */
-			err = sysoff_measure(CLOCKID_TO_FD(clock->clkid),
-					     domain->src_clock->clkid,
-					     clock->sysoff_method,
-					     domain->phc_readings,
-					     &offset, &ts, &delay);
+			err = sysoff_measure_retry(CLOCKID_TO_FD(clock->clkid),
+						   domain->src_clock->clkid,
+						   clock->sysoff_method,
+						   domain->phc_readings,
+						   domain->phc_tries,
+						   &offset, &ts, &delay);
 			if (!err) {
 				offset = -offset;
 				ts += offset;
@@ -1513,6 +1516,7 @@ int main(int argc, char *argv[])
 	}
 	settings.kernel_leap = config_get_int(cfg, NULL, "kernel_leap");
 	settings.sanity_freq_limit = config_get_int(cfg, NULL, "sanity_freq_limit");
+	settings.phc_tries = config_get_int(cfg, NULL, "sysoff_tries");
 
 	if (autocfg) {
 		if (n_domains == 0)
