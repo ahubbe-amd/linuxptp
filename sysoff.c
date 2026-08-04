@@ -31,7 +31,7 @@
 
 static void print_ioctl_error(const char *name)
 {
-	if (errno == EOPNOTSUPP)
+	if (errno == EOPNOTSUPP || errno == EINVAL)
 		pr_debug("ioctl %s: %s", name, strerror(errno));
 	else
 		pr_err("ioctl %s: %s", name, strerror(errno));
@@ -167,13 +167,14 @@ int sysoff_measure2(int fd1, int fd2, clockid_t sys_clock, int method,
 		    int n_samples, int64_t *result, uint64_t *ts,
 		    int64_t *delay)
 {
-	struct timespec first, last;
+	struct timespec first = {}, last = {};
 	int64_t interval, result1, result2, result3;
 	int64_t delay1, delay2, delay3, drift;
 	uint64_t ts1, ts2, ts3;
 	int err;
 
-	clock_gettime(CLOCK_MONOTONIC, &first);
+	if (sys_clock != CLOCK_MONOTONIC)
+		clock_gettime(CLOCK_MONOTONIC, &first);
 
 	err = sysoff_measure(fd1, sys_clock, method, n_samples,
 			     &result1, &ts1, &delay1);
@@ -190,19 +191,22 @@ int sysoff_measure2(int fd1, int fd2, clockid_t sys_clock, int method,
 	if (err)
 		return err;
 
-	clock_gettime(CLOCK_MONOTONIC, &last);
-
 	/*
-	 * Validate the interval to detect if sys_clock stepped between the
-	 * two fd1 measurements.  Both inner sysoff measurements bracket fd1
-	 * against the same sys_clock, so the system terms cancel when
-	 * differencing result1 and result3.  If sys_clock stepped, the
-	 * ts1/ts3 window check detects it and we retry.
+	 * Validate the interval when sys_clock can step.  Both inner sysoff
+	 * measurements bracket fd1 against the same sys_clock, so the system
+	 * terms cancel when differencing result1 and result3.  If sys_clock
+	 * stepped between the two fd1 measurements the ts1/ts3 window check
+	 * detects it and we retry.  CLOCK_MONOTONIC cannot step, so skip the
+	 * check in that case.
 	 */
-	interval = (last.tv_sec - first.tv_sec) * NS_PER_SEC +
-		last.tv_nsec - first.tv_nsec;
-	if (ts3 < ts1 || ts3 - ts1 > (uint64_t)interval)
-		return -EBUSY;
+	if (sys_clock != CLOCK_MONOTONIC) {
+		clock_gettime(CLOCK_MONOTONIC, &last);
+
+		interval = (last.tv_sec - first.tv_sec) * NS_PER_SEC +
+			last.tv_nsec - first.tv_nsec;
+		if (ts3 < ts1 || ts3 - ts1 > (uint64_t)interval)
+			return -EBUSY;
+	}
 
 	/* estimate the accumulated drift, to be added to delay */
 	drift = result3 - result1;

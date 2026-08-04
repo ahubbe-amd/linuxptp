@@ -831,6 +831,14 @@ static int is_phc2phc_sysoff_usable(struct clock *src, struct clock *dst,
 	fd1 = CLOCKID_TO_FD(src->clkid);
 	fd2 = CLOCKID_TO_FD(dst->clkid);
 
+	/* Prefer CLOCK_MONOTONIC: it cannot step, so interval check is skipped */
+	method = sysoff_probe2(fd1, fd2, CLOCK_MONOTONIC, phc_readings);
+	if (method >= 0) {
+		dst->phc2phc_clkid = CLOCK_MONOTONIC;
+		dst->phc2phc_method = method;
+		return 1;
+	}
+
 	method = sysoff_probe2(fd1, fd2, CLOCK_REALTIME, phc_readings);
 	if (method >= 0) {
 		dst->phc2phc_clkid = CLOCK_REALTIME;
