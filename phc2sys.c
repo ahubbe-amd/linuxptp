@@ -803,10 +803,10 @@ static int update_needed(struct clock *c)
 static int is_sysoff_usable(struct clock *src, struct clock *dst,
 			    int phc_readings)
 {
-	if (!is_sys_clock(dst->clkid) || is_sys_clock(src->clkid))
+	if (is_sys_clock(src->clkid))
 		return 0;
 
-	/* Update the method if the system clock changed */
+	/* Update the method if the clock changed */
 	if (src->sysoff_clkid != dst->clkid) {
 		src->sysoff_method = sysoff_probe(CLOCKID_TO_FD(src->clkid),
 						  dst->clkid, phc_readings);

@@ -32,7 +32,8 @@ enum {
 /**
  * Check to see if a PTP_SYS_OFFSET ioctl is supported.
  * @param fd         An open file descriptor to a PHC device.
- * @param clockid_t  The system clock to measure against.
+ * @param sys_clock  The system clock to measure against.
+ * @param n_samples  The number of consecutive readings to make.
  * @return  One of the SYSOFF_ enumeration values.
  */
 int sysoff_probe(int fd, clockid_t sys_clock, int n_samples);
