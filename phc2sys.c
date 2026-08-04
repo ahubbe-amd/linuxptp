@@ -76,6 +76,8 @@ struct clock {
 	int phc_index;
 	clockid_t sysoff_clkid;
 	int sysoff_method;
+	clockid_t phc2phc_clkid;
+	int phc2phc_method;
 	int is_utc;
 	int dest_only;
 	int state;
@@ -221,6 +223,8 @@ static struct clock *clock_add(struct domain *domain, const char *device,
 	/* Set an invalid value to force probing on the first sysoff attempt */
 	c->sysoff_clkid = -1;
 	c->sysoff_method = SYSOFF_RUN_TIME_MISSING;
+	c->phc2phc_clkid = -1;
+	c->phc2phc_method = SYSOFF_RUN_TIME_MISSING;
 
 	/* Add the clock to the end of the list to keep them in the
 	   command-line or ptp4l order */
@@ -812,6 +816,31 @@ static int is_sysoff_usable(struct clock *src, struct clock *dst,
 	return src->sysoff_method >= 0;
 }
 
+static int is_phc2phc_sysoff_usable(struct clock *src, struct clock *dst,
+				     int phc_readings)
+{
+	int fd1, fd2, method;
+
+	if (is_sys_clock(src->clkid) || is_sys_clock(dst->clkid))
+		return 0;
+
+	/* Return cached result if already probed */
+	if (dst->phc2phc_clkid != (clockid_t)-1)
+		return dst->phc2phc_method >= 0;
+
+	fd1 = CLOCKID_TO_FD(src->clkid);
+	fd2 = CLOCKID_TO_FD(dst->clkid);
+
+	method = sysoff_probe2(fd1, fd2, CLOCK_REALTIME, phc_readings);
+	if (method >= 0) {
+		dst->phc2phc_clkid = CLOCK_REALTIME;
+		dst->phc2phc_method = method;
+		return 1;
+	}
+
+	return 0;
+}
+
 static int update_domain_clocks(struct domain *domain)
 {
 	int64_t offset, delay;
@@ -852,6 +881,16 @@ static int update_domain_clocks(struct domain *domain)
 				offset = -offset;
 				ts += offset;
 			}
+		} else if (is_phc2phc_sysoff_usable(domain->src_clock, clock,
+						     domain->phc_readings)) {
+			/* use PHC-to-PHC sysoff via common sys clock */
+			err = sysoff_measure2_retry(CLOCKID_TO_FD(domain->src_clock->clkid),
+						    CLOCKID_TO_FD(clock->clkid),
+						    clock->phc2phc_clkid,
+						    clock->phc2phc_method,
+						    domain->phc_readings,
+						    domain->phc_tries,
+						    &offset, &ts, &delay);
 		} else {
 			/* use phc */
 			err = clockadj_compare(domain->src_clock->clkid,
