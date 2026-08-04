@@ -66,3 +66,49 @@ int sysoff_measure(int fd, clockid_t sys_clock, int method, int n_samples,
 int sysoff_measure_retry(int fd, clockid_t sys_clock, int method, int n_samples,
 			 int n_tries, int64_t *result, uint64_t *ts,
 			 int64_t *delay);
+
+/**
+ * Check if a PTP_SYS_OFFSET ioctl is supported for both PHCs against a
+ * common system clock using the same method.
+ * @param fd1        An open file descriptor to the first PHC device.
+ * @param fd2        An open file descriptor to the second PHC device.
+ * @param sys_clock  The system clock to measure against.
+ * @param n_samples  The number of consecutive readings to make.
+ * @return  One of the SYSOFF_ enumeration values.
+ */
+int sysoff_probe2(int fd1, int fd2, clockid_t sys_clock, int n_samples);
+
+/**
+ * Measure the offset between two PHCs via a common system clock.
+ * @param fd1        An open file descriptor to the first PHC device.
+ * @param fd2        An open file descriptor to the second PHC device.
+ * @param sys_clock  The system clock used as intermediary for both measurements.
+ *                   Both PHCs are measured against the same sys_clock so the
+ *                   system clock terms cancel in result1 - result2.
+ * @param method     A non-negative SYSOFF_ value used for both PHC devices.
+ * @param n_samples  The number of consecutive readings to make.
+ * @param result     The estimated offset in nanoseconds.
+ * @param ts         The second PHC time corresponding to the 'result'.
+ * @param delay      The delay in reading of the clocks in nanoseconds.
+ * @return  Zero on success, negative error code otherwise.
+ */
+int sysoff_measure2(int fd1, int fd2, clockid_t sys_clock, int method,
+		    int n_samples, int64_t *result, uint64_t *ts,
+		    int64_t *delay);
+
+/**
+ * Measure the offset between two PHCs, retrying on -EBUSY.
+ * @param fd1        An open file descriptor to the first PHC device.
+ * @param fd2        An open file descriptor to the second PHC device.
+ * @param sys_clock  The system clock used as intermediary; see sysoff_measure2.
+ * @param method     A non-negative SYSOFF_ value used for both PHC devices.
+ * @param n_samples  The number of consecutive readings to make.
+ * @param n_tries    The number of attempts in case of -EBUSY.
+ * @param result     The estimated offset in nanoseconds.
+ * @param ts         The second PHC time corresponding to the 'result'.
+ * @param delay      The delay in reading of the clocks in nanoseconds.
+ * @return  Zero on success, negative error code otherwise.
+ */
+int sysoff_measure2_retry(int fd1, int fd2, clockid_t sys_clock, int method,
+			  int n_samples, int n_tries,
+			  int64_t *result, uint64_t *ts, int64_t *delay);

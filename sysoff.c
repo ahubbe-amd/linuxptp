@@ -164,7 +164,80 @@ int sysoff_measure_retry(int fd, clockid_t sys_clock, int method, int n_samples,
 	return err;
 }
 
-int sysoff_probe(int fd, clockid_t sys_clock, int n_samples)
+int sysoff_measure2_retry(int fd1, int fd2, clockid_t sys_clock, int method,
+			  int n_samples, int n_tries, int64_t *result,
+			  uint64_t *ts, int64_t *delay)
+{
+	struct timespec first, last;
+	int64_t interval, result1, result2, result3;
+	int64_t delay1, delay2, delay3, drift;
+	uint64_t ts1, ts2, ts3;
+	int err;
+
+	clock_gettime(CLOCK_MONOTONIC, &first);
+
+	err = sysoff_measure_retry(fd1, sys_clock, method, n_samples, n_tries,
+				   &result1, &ts1, &delay1);
+	if (err)
+		return err;
+
+	err = sysoff_measure_retry(fd2, sys_clock, method, n_samples, n_tries,
+				   &result2, &ts2, &delay2);
+	if (err)
+		return err;
+
+	err = sysoff_measure_retry(fd1, sys_clock, method, n_samples, n_tries,
+				   &result3, &ts3, &delay3);
+	if (err)
+		return err;
+
+	clock_gettime(CLOCK_MONOTONIC, &last);
+
+	/*
+	 * Validate the interval to detect if sys_clock stepped between the
+	 * two fd1 measurements.  Both inner sysoff measurements bracket fd1
+	 * against the same sys_clock, so the system terms cancel when
+	 * differencing result1 and result3.  If sys_clock stepped, the
+	 * ts1/ts3 window check detects it and we retry.
+	 */
+	interval = (last.tv_sec - first.tv_sec) * NS_PER_SEC +
+		last.tv_nsec - first.tv_nsec;
+	if (ts3 < ts1 || ts3 - ts1 > (uint64_t)interval)
+		return -EBUSY;
+
+	/* estimate the accumulated drift, to be added to delay */
+	drift = result3 - result1;
+	if (drift < 0)
+		drift = -drift;
+
+	/* use the maximum of the first or third delay */
+	if (delay1 < delay3)
+		delay1 = delay3;
+
+	/* average the offsets of the first clock */
+	result1 = (result1 + result3) / 2;
+
+	/* get PHC-to-PHC offset by subtracting sys offsets */
+	*result = result1 - result2;
+	/* use the second PHC's time, not system time for ts */
+	*ts = ts2 - result2;
+	/* sum of the delays + drift */
+	*delay = delay1 + delay2 + drift;
+
+	return 0;
+}
+
+int sysoff_measure2(int fd1, int fd2, clockid_t sys_clock, int method,
+		    int n_samples, int64_t *result, uint64_t *ts,
+		    int64_t *delay)
+{
+	int n_tries = 1;
+
+	return sysoff_measure2_retry(fd1, fd2, sys_clock, method,
+				     n_samples, n_tries, result, ts, delay);
+}
+
+int sysoff_probe2(int fd1, int fd2, clockid_t sys_clock, int n_samples)
 {
 	int64_t junk, delay;
 	int method, err;
@@ -179,14 +252,27 @@ int sysoff_probe(int fd, clockid_t sys_clock, int n_samples)
 	}
 
 	for (method = 0; method < SYSOFF_LAST; method++) {
-		err = sysoff_measure_retry(fd, sys_clock, method,
+		err = sysoff_measure_retry(fd1, sys_clock, method,
 					   n_samples, n_tries,
 					   &junk, &ts, &delay);
 		if (err)
 			continue;
 
+		if (fd2 >= 0) {
+			err = sysoff_measure_retry(fd2, sys_clock, method,
+						   n_samples, n_tries,
+						   &junk, &ts, &delay);
+			if (err)
+				continue;
+		}
+
 		return method;
 	}
 
 	return SYSOFF_RUN_TIME_MISSING;
+}
+
+int sysoff_probe(int fd, clockid_t sys_clock, int n_samples)
+{
+	return sysoff_probe2(fd, -1, sys_clock, n_samples);
 }
